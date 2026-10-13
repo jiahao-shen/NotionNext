@@ -122,7 +122,8 @@ const NotionPage = ({ post, className }) => {
       }
     }
     // medium-zoom 会把放大图挂到 body 上并读取原图的 data-zoom-src 加载高清图，
-    // 在其点击处理之前（捕获阶段）补上 IMAGE_ZOOM_IN_WIDTH 宽度的优化地址
+    // 在其点击处理之前（捕获阶段）补上优化地址；取 /_next/image 允许的最大宽度 3840，
+    // 原图不超过该宽度时保持原始像素（不会放大）
     const handleClick = e => {
       const originalSrc =
         e.target?.tagName === 'IMG' &&
@@ -130,7 +131,7 @@ const NotionPage = ({ post, className }) => {
       if (originalSrc && !e.target.hasAttribute('data-zoom-src')) {
         e.target.setAttribute(
           'data-zoom-src',
-          optimizeNotionImage(originalSrc, IMAGE_ZOOM_IN_WIDTH)
+          optimizeNotionImage(originalSrc, 3840)
         )
       }
     }
@@ -147,7 +148,7 @@ const NotionPage = ({ post, className }) => {
       articleRoot.removeEventListener('error', handleError, true)
       articleRoot.removeEventListener('click', handleClick, true)
     }
-  }, [post, IMAGE_ZOOM_IN_WIDTH])
+  }, [post])
 
   useEffect(() => {
     // Spoiler文本功能
