@@ -1,5 +1,10 @@
 import { siteConfig } from '@/lib/config'
-import { compressImage, mapImgUrl } from '@/lib/db/notion/mapImage'
+import {
+  compressImage,
+  getOriginalImageUrl,
+  mapImgUrl,
+  optimizeNotionImage
+} from '@/lib/db/notion/mapImage'
 import NotionEmbed from '@/components/NotionEmbed'
 import NotionLink from '@/components/NotionLink'
 import { isBrowser, loadExternalResource } from '@/lib/utils'
@@ -9,6 +14,12 @@ import dynamic from 'next/dynamic'
 import { useEffect, useRef } from 'react'
 import { NotionRenderer } from 'react-notion-x'
 import OriginalityProof from './OriginalityProof'
+
+/**
+ * 正文图片地址：先按原逻辑映射，Notion 图片再改走 Vercel 图片优化
+ */
+const mapOptimizedImgUrl = (url, block) =>
+  optimizeNotionImage(mapImgUrl(url, block))
 
 /**
  * 整个站点的核心组件
@@ -94,6 +105,52 @@ const NotionPage = ({ post, className }) => {
   }, [post])
 
   useEffect(() => {
+    // 正文图片走 Vercel 图片优化：失败时（如超出额度返回 402）回退到 Notion 原图；放大时取高清图
+    const articleRoot = document.getElementById('notion-article')
+    if (!articleRoot) {
+      return
+    }
+    const fallbackToOriginal = img => {
+      const originalSrc = getOriginalImageUrl(img?.getAttribute('src'))
+      if (originalSrc) {
+        img.setAttribute('src', originalSrc)
+      }
+    }
+    const handleError = e => {
+      if (e.target?.tagName === 'IMG') {
+        fallbackToOriginal(e.target)
+      }
+    }
+    // medium-zoom 会把放大图挂到 body 上并读取原图的 data-zoom-src 加载高清图，
+    // 在其点击处理之前（捕获阶段）补上优化地址；取 /_next/image 允许的最大宽度 3840，
+    // 原图不超过该宽度时保持原始像素（不会放大）
+    const handleClick = e => {
+      const originalSrc =
+        e.target?.tagName === 'IMG' &&
+        getOriginalImageUrl(e.target.getAttribute('src'))
+      if (originalSrc && !e.target.hasAttribute('data-zoom-src')) {
+        e.target.setAttribute(
+          'data-zoom-src',
+          optimizeNotionImage(originalSrc, 3840)
+        )
+      }
+    }
+    // error 事件不冒泡，需在捕获阶段监听
+    articleRoot.addEventListener('error', handleError, true)
+    articleRoot.addEventListener('click', handleClick, true)
+    // 页面水合前就已加载失败的图片不会再触发 error，这里补查一次
+    articleRoot.querySelectorAll('img[src^="/_next/image"]').forEach(img => {
+      if (img.complete && img.naturalWidth === 0) {
+        fallbackToOriginal(img)
+      }
+    })
+    return () => {
+      articleRoot.removeEventListener('error', handleError, true)
+      articleRoot.removeEventListener('click', handleClick, true)
+    }
+  }, [post])
+
+  useEffect(() => {
     // Spoiler文本功能
     if (SPOILER_TEXT_TAG) {
       import('lodash/escapeRegExp').then(escapeRegExp => {
@@ -118,7 +175,7 @@ const NotionPage = ({ post, className }) => {
       <NotionRenderer
         recordMap={post?.blockMap}
         mapPageUrl={mapPageUrl}
-        mapImageUrl={mapImgUrl}
+        mapImageUrl={mapOptimizedImgUrl}
         components={{
           Code,
           Collection,
