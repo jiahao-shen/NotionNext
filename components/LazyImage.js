@@ -1,5 +1,8 @@
 import { siteConfig } from '@/lib/config'
-import { optimizeNotionImage } from '@/lib/db/notion/mapImage'
+import {
+  NOTION_IMAGE_DISPLAY_WIDTH,
+  optimizeNotionImage
+} from '@/lib/db/notion/mapImage'
 import Head from 'next/head'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -43,7 +46,7 @@ export default function LazyImage({
   const imageRef = useRef(null)
   const [currentSrc, setCurrentSrc] = useState(
     priority && src
-      ? getImageSrc(src, targetImageWidth, maxWidth)
+      ? getImageSrc(src, targetImageWidth)
       : placeholderSrc || defaultPlaceholderSrc
   )
   const [imageLoaded, setImageLoaded] = useState(Boolean(priority && src))
@@ -77,7 +80,7 @@ export default function LazyImage({
       adjustImgSize(src, targetImageWidth) || defaultPlaceholderSrc
     // Notion 图片优先走 Vercel 图片优化
     const imageSrc =
-      getImageSrc(src, targetImageWidth, maxWidth) || adjustedImageSrc
+      getImageSrc(src, targetImageWidth) || adjustedImageSrc
     const imageElement = imageRef.current
     const handleImageLoaded = () => {
       if (typeof onLoad === 'function') {
@@ -157,7 +160,6 @@ export default function LazyImage({
   }, [
     src,
     targetImageWidth,
-    maxWidth,
     priority,
     defaultPlaceholderSrc,
     fallbackSrc,
@@ -209,7 +211,7 @@ export default function LazyImage({
           <link
             rel='preload'
             as='image'
-            href={getImageSrc(src, targetImageWidth, maxWidth)}
+            href={getImageSrc(src, targetImageWidth)}
             fetchpriority='high'
           />
         </Head>
@@ -221,16 +223,15 @@ export default function LazyImage({
 /**
  * Notion 图片改走 Vercel 图片优化，其余图片按窗口尺寸压缩
  * 优化时用未按屏宽调整的原地址，避免不同屏幕宽度各产生一份缓存、重复消耗转换额度；
- * 按 2 倍宽度取图兼顾高清屏，但不超过 IMAGE_COMPRESS_WIDTH
+ * 按 2 倍宽度取图兼顾高清屏，但不超过 NOTION_IMAGE_DISPLAY_WIDTH
  * @param {*} src
  * @param {*} targetWidth
- * @param {*} maxWidth
  * @returns
  */
-const getImageSrc = (src, targetWidth, maxWidth) => {
+const getImageSrc = (src, targetWidth) => {
   const optimizedSrc = optimizeNotionImage(
     src,
-    Math.min(Number(targetWidth) * 2, Number(maxWidth)) || targetWidth
+    Math.min(Number(targetWidth) * 2, NOTION_IMAGE_DISPLAY_WIDTH) || targetWidth
   )
   return optimizedSrc !== src ? optimizedSrc : adjustImgSize(src, targetWidth)
 }
