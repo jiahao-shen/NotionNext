@@ -1,4 +1,5 @@
 import { siteConfig } from '@/lib/config'
+import { optimizeNotionImage } from '@/lib/db/notion/mapImage'
 import Head from 'next/head'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -42,7 +43,7 @@ export default function LazyImage({
   const imageRef = useRef(null)
   const [currentSrc, setCurrentSrc] = useState(
     priority && src
-      ? adjustImgSize(src, targetImageWidth)
+      ? getImageSrc(src, targetImageWidth, maxWidth)
       : placeholderSrc || defaultPlaceholderSrc
   )
   const [imageLoaded, setImageLoaded] = useState(Boolean(priority && src))
@@ -74,6 +75,9 @@ export default function LazyImage({
   useEffect(() => {
     const adjustedImageSrc =
       adjustImgSize(src, targetImageWidth) || defaultPlaceholderSrc
+    // Notion 图片优先走 Vercel 图片优化
+    const imageSrc =
+      getImageSrc(src, targetImageWidth, maxWidth) || adjustedImageSrc
     const imageElement = imageRef.current
     const handleImageLoaded = () => {
       if (typeof onLoad === 'function') {
@@ -85,28 +89,37 @@ export default function LazyImage({
       }
     }
 
+    /**
+     * 预加载图片，成功后再替换占位图
+     * 图片优化失败时（如超出额度返回 402）先回退到原图，原图也失败才走 handleImageError
+     */
+    const preloadImage = img => {
+      let loadingSrc = imageSrc
+      img.onload = () => {
+        setCurrentSrc(loadingSrc)
+        handleImageLoaded(loadingSrc)
+      }
+      img.onerror = () => {
+        if (loadingSrc !== adjustedImageSrc) {
+          loadingSrc = adjustedImageSrc
+          img.src = loadingSrc
+          return
+        }
+        handleImageError()
+      }
+      img.src = loadingSrc
+    }
+
     // 如果是优先级图片，直接加载
     if (priority) {
-      const img = new Image()
-      img.src = adjustedImageSrc
-      img.onload = () => {
-        setCurrentSrc(adjustedImageSrc)
-        handleImageLoaded(adjustedImageSrc)
-      }
-      img.onerror = handleImageError
+      preloadImage(new Image())
       return
     }
 
     // 检查浏览器是否支持IntersectionObserver
     if (!window.IntersectionObserver) {
       // 降级处理：直接加载图片
-      const img = new Image()
-      img.src = adjustedImageSrc
-      img.onload = () => {
-        setCurrentSrc(adjustedImageSrc)
-        handleImageLoaded(adjustedImageSrc)
-      }
-      img.onerror = handleImageError
+      preloadImage(new Image())
       return
     }
 
@@ -120,12 +133,7 @@ export default function LazyImage({
             if ('decoding' in img) {
               img.decoding = 'async'
             }
-            img.src = adjustedImageSrc
-            img.onload = () => {
-              setCurrentSrc(adjustedImageSrc)
-              handleImageLoaded(adjustedImageSrc)
-            }
-            img.onerror = handleImageError
+            preloadImage(img)
 
             observer.unobserve(entry.target)
           }
@@ -149,6 +157,7 @@ export default function LazyImage({
   }, [
     src,
     targetImageWidth,
+    maxWidth,
     priority,
     defaultPlaceholderSrc,
     fallbackSrc,
@@ -200,13 +209,30 @@ export default function LazyImage({
           <link
             rel='preload'
             as='image'
-            href={adjustImgSize(src, targetImageWidth)}
+            href={getImageSrc(src, targetImageWidth, maxWidth)}
             fetchpriority='high'
           />
         </Head>
       )}
     </>
   )
+}
+
+/**
+ * Notion 图片改走 Vercel 图片优化，其余图片按窗口尺寸压缩
+ * 优化时用未按屏宽调整的原地址，避免不同屏幕宽度各产生一份缓存、重复消耗转换额度；
+ * 按 2 倍宽度取图兼顾高清屏，但不超过 IMAGE_COMPRESS_WIDTH
+ * @param {*} src
+ * @param {*} targetWidth
+ * @param {*} maxWidth
+ * @returns
+ */
+const getImageSrc = (src, targetWidth, maxWidth) => {
+  const optimizedSrc = optimizeNotionImage(
+    src,
+    Math.min(Number(targetWidth) * 2, Number(maxWidth)) || targetWidth
+  )
+  return optimizedSrc !== src ? optimizedSrc : adjustImgSize(src, targetWidth)
 }
 
 /**
