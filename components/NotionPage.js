@@ -16,7 +16,7 @@ import { NotionRenderer } from 'react-notion-x'
 import OriginalityProof from './OriginalityProof'
 
 /**
- * 正文图片地址：先按原逻辑映射，Notion 图片再改走 Vercel 图片优化
+ * 正文图片地址：先按原逻辑映射，Notion 图片再改走 Vercel 图片优化（默认 1920 宽）
  */
 const mapOptimizedImgUrl = (url, block) =>
   optimizeNotionImage(mapImgUrl(url, block))
@@ -122,8 +122,8 @@ const NotionPage = ({ post, className }) => {
       }
     }
     // medium-zoom 会把放大图挂到 body 上并读取原图的 data-zoom-src 加载高清图，
-    // 在其点击处理之前（捕获阶段）补上优化地址；取 /_next/image 允许的最大宽度 3840，
-    // 原图不超过该宽度时保持原始像素（不会放大）
+    // 在其点击处理之前（捕获阶段）补上优化地址：取 Notion 原图、/_next/image 允许的最大宽度 3840；
+    // 原图不超过该宽度时保持原始像素（不会放大），超出 Vercel 处理上限的超大原图会原样返回
     const handleClick = e => {
       const originalSrc =
         e.target?.tagName === 'IMG' &&
@@ -131,7 +131,7 @@ const NotionPage = ({ post, className }) => {
       if (originalSrc && !e.target.hasAttribute('data-zoom-src')) {
         e.target.setAttribute(
           'data-zoom-src',
-          optimizeNotionImage(originalSrc, 3840)
+          optimizeNotionImage(originalSrc, 3840, { original: true })
         )
       }
     }
