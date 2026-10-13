@@ -324,6 +324,16 @@ const nextConfig = {
             //   { key: 'Access-Control-Max-Age', value: '86400' }
           ]
         },
+        // 自托管 Font Awesome（public/css/all.min.css、public/webfonts/*）
+        // Vercel 默认对 public 文件返回 max-age=0，这里给浏览器 30 天缓存；文件名不带版本号，所以不设一年
+        {
+          source: '/css/all.min.css',
+          headers: [{ key: 'Cache-Control', value: 'public, max-age=2592000' }]
+        },
+        {
+          source: '/webfonts/:path*',
+          headers: [{ key: 'Cache-Control', value: 'public, max-age=2592000' }]
+        },
         //   {
         //     source: '/api/:path*',
         //     headers: [
