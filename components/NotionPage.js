@@ -81,13 +81,10 @@ const NotionPage = ({ post, className }) => {
             setTimeout(() => {
               // 获取该元素的 src 属性
               const src = mutation?.target?.getAttribute('src')
-              const originalSrc = getOriginalImageUrl(src)
               //   替换为更高清的图像
               mutation?.target?.setAttribute(
                 'src',
-                originalSrc
-                  ? optimizeNotionImage(originalSrc, IMAGE_ZOOM_IN_WIDTH)
-                  : compressImage(src, IMAGE_ZOOM_IN_WIDTH)
+                compressImage(src, IMAGE_ZOOM_IN_WIDTH)
               )
             }, 800)
           }
@@ -108,7 +105,7 @@ const NotionPage = ({ post, className }) => {
   }, [post])
 
   useEffect(() => {
-    // 正文图片走 Vercel 图片优化失败时（如超出额度返回 402），回退到 Notion 原图
+    // 正文图片走 Vercel 图片优化：失败时（如超出额度返回 402）回退到 Notion 原图；放大时取高清图
     const articleRoot = document.getElementById('notion-article')
     if (!articleRoot) {
       return
@@ -124,8 +121,22 @@ const NotionPage = ({ post, className }) => {
         fallbackToOriginal(e.target)
       }
     }
+    // medium-zoom 会把放大图挂到 body 上并读取原图的 data-zoom-src 加载高清图，
+    // 在其点击处理之前（捕获阶段）补上 IMAGE_ZOOM_IN_WIDTH 宽度的优化地址
+    const handleClick = e => {
+      const originalSrc =
+        e.target?.tagName === 'IMG' &&
+        getOriginalImageUrl(e.target.getAttribute('src'))
+      if (originalSrc && !e.target.hasAttribute('data-zoom-src')) {
+        e.target.setAttribute(
+          'data-zoom-src',
+          optimizeNotionImage(originalSrc, IMAGE_ZOOM_IN_WIDTH)
+        )
+      }
+    }
     // error 事件不冒泡，需在捕获阶段监听
     articleRoot.addEventListener('error', handleError, true)
+    articleRoot.addEventListener('click', handleClick, true)
     // 页面水合前就已加载失败的图片不会再触发 error，这里补查一次
     articleRoot.querySelectorAll('img[src^="/_next/image"]').forEach(img => {
       if (img.complete && img.naturalWidth === 0) {
@@ -134,8 +145,9 @@ const NotionPage = ({ post, className }) => {
     })
     return () => {
       articleRoot.removeEventListener('error', handleError, true)
+      articleRoot.removeEventListener('click', handleClick, true)
     }
-  }, [post])
+  }, [post, IMAGE_ZOOM_IN_WIDTH])
 
   useEffect(() => {
     // Spoiler文本功能
