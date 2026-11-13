@@ -229,6 +229,8 @@ const nextConfig = {
     // 图片尺寸优化
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    // 允许的压缩质量；Notion 图片用 90（见 lib/db/notion/mapImage.js 的 NOTION_IMAGE_QUALITY）
+    qualities: [75, 90],
     // NotionNext 站长图源不可控（任意外链），这里放开 http/https 远程图片来源
     // 说明：这会显著降低“域名白名单漏配导致图片不显示”的概率
     remotePatterns: [

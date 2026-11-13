@@ -2,6 +2,7 @@ import { siteConfig } from '@/lib/config'
 import {
   compressImage,
   getOriginalImageUrl,
+  NOTION_IMAGE_ZOOM_WIDTH,
   mapImgUrl,
   optimizeNotionImage
 } from '@/lib/db/notion/mapImage'
@@ -122,8 +123,8 @@ const NotionPage = ({ post, className }) => {
       }
     }
     // medium-zoom 会把放大图挂到 body 上并读取原图的 data-zoom-src 加载高清图，
-    // 在其点击处理之前（捕获阶段）补上优化地址：取 Notion 原图、/_next/image 允许的最大宽度 3840；
-    // 原图不超过该宽度时保持原始像素（不会放大），超出 Vercel 处理上限的超大原图会原样返回
+    // 在其点击处理之前（捕获阶段）补上优化地址：取 Notion 缩到 2048 宽的版本再由 Vercel 压缩缓存。
+    // 不取原图：超大原图超出 Vercel 处理上限会被原样转发且几乎不缓存，每次放大都要跨境下载数 MB
     const handleClick = e => {
       const originalSrc =
         e.target?.tagName === 'IMG' &&
@@ -131,7 +132,7 @@ const NotionPage = ({ post, className }) => {
       if (originalSrc && !e.target.hasAttribute('data-zoom-src')) {
         e.target.setAttribute(
           'data-zoom-src',
-          optimizeNotionImage(originalSrc, 3840, { original: true })
+          optimizeNotionImage(originalSrc, NOTION_IMAGE_ZOOM_WIDTH)
         )
       }
     }
